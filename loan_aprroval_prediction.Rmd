@@ -1,0 +1,80 @@
+---
+title: "Loan Approval Prediction"
+output:
+  pdf_document: 
+    highlight: espresso
+  html_notebook: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+options(repos = "https://cloud.r-project.org/")
+```
+
+# 1. Install and load required modules
+
+```{r}
+# instaling modules
+
+install.packages(c("tidyverse", "dplyr", "tidyr"))
+install.packages("caret")
+install.packages("tm")
+
+# Loading libraries
+library(caret)
+library(tidyverse)
+library(tm)
+library(dplyr)
+library(tidyr)
+
+```
+
+# 2. Dataset loading
+
+```{r}
+# loading csv loan datset
+loan_data <- read.csv("dataset.csv")
+head(loan_data)
+```
+
+# 3. Data cleaning
+
+```{r}
+# view the structure of the data
+str(loan_data)
+```
+
+```{r}
+# Display summary statistics
+summary(loan_data)
+```
+
+```{r}
+# Identify missing values
+missing_values <- loan_data %>% summarise_all(~sum(is.na(.)))
+
+# View columns with missing values
+print(missing_values)
+```
+
+# 4. Data exploration and analysis
+
+```{r}
+# number of features (attributes)
+num_features <- length(colnames(loan_data))
+cat("The number of features (attributes) are : ", num_features, "\n")
+
+# list the name of instances
+list_features <- colnames(loan_data)
+cat("\n The list of attributes are: \n")
+list_features
+```
+```{r}
+
+```
+
+# 5. Machine learning amethod selection and model training
+
+# 6. Model evaluation
+
+# 7. Model improvement/ optimization
