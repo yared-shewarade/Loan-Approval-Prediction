@@ -1,0 +1,418 @@
+---
+title: "Loan Approval Prediction"
+output:
+  pdf_document: 
+    highlight: espresso
+  html_notebook: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+options(repos = "https://cloud.r-project.org/")
+```
+
+# 1. Install and load required modules
+
+```{r}
+# instaling modules
+
+install.packages(c("tidyverse", "dplyr", "tidyr"))
+install.packages("caret")
+install.packages("tm")
+
+# Loading libraries
+library(caret)
+library(tidyverse)
+library(tm)
+library(dplyr)
+library(tidyr)
+library(randomForest)
+library(glmnet)
+library(xgboost)
+library(e1071)
+library(rpart)
+
+```
+
+# 2. Dataset loading
+
+```{r}
+# loading csv loan datset
+loan_data <- read.csv("dataset.csv")
+head(loan_data)
+```
+```{r}
+tail(loan_data)
+```
+```{r}
+View(loan_data)
+```
+
+# 3. Data cleaning and Exploratory Data Analysis (EDA)
+
+```{r}
+# Identify missing values
+missing_values <- loan_data %>% summarise_all(~sum(is.na(.)))
+
+# View columns with missing values
+str(missing_values)
+```
+
+```{r}
+# view the structure of the data
+str(loan_data)
+```
+
+```{r}
+# Display summary statistics
+summary(loan_data)
+```
+
+```{r}
+# number of features (attributes)
+num_features <- length(colnames(loan_data))
+cat("The number of features (attributes) are : ", num_features, "\n")
+
+# list the name of instances
+list_features <- colnames(loan_data)
+cat("\n The list of attributes are: \n")
+list_features
+```
+# 3.1 Univariate Analysis
+
+```{r}
+# Summary Statistics
+summary(loan_data[, c("no_of_dependents", "income_annum", "loan_amount", "loan_term", "cibil_score", 
+                      "residential_assets_value", "commercial_assets_value", "luxury_assets_value", 
+                      "bank_asset_value")])
+```
+```{r}
+# Histograms
+hist(loan_data$income_annum, main = "Histogram of Annual Income", xlab = "Annual Income", col = "blue")
+```
+```{r}
+hist(loan_data$loan_amount, main = "Histogram of Loan Amount", xlab = "Loan Amount", col = "green")
+```
+```{r}
+hist(loan_data$cibil_score, main = "Histogram of CIBIL Score", xlab = "CIBIL Score", col = "orange")
+```
+```{r}
+# Univariate Analysis for Categorical Variables
+# Frequency Table
+table_education <- table(loan_data$education)
+# Bar Plots
+barplot(table_education, main = "Bar Plot of Education Level", xlab = "Education Level", 
+        ylab = "Frequency", col = "skyblue")
+```
+```{r}
+
+# Frequency Table
+table_self_employed <- table(loan_data$self_employed)
+# Bar Plots
+barplot(table_self_employed, main = "Bar Plot of Self-Employment Status", xlab = "Self-Employment Status", 
+        ylab = "Frequency", col = "salmon")
+```
+```{r}
+# Frequency Table
+table_loan_status <- table(loan_data$loan_status)
+# Bar Plots
+barplot(table_loan_status, main = "Bar Plot of Loan Status", xlab = "Loan Status", 
+        ylab = "Frequency", col = "purple")
+```
+```{r}
+# Numeric variables for box plots
+numeric_vars <- c("no_of_dependents", "income_annum", "loan_amount", "loan_term", "cibil_score", 
+                  "residential_assets_value", "commercial_assets_value", "luxury_assets_value", 
+                  "bank_asset_value")
+
+# Create box plots
+par(mfrow=c(3, 3))  # Arrange plots in a 3x3 grid
+for (var in numeric_vars) {
+  boxplot(loan_data[[var]], main = paste("Box Plot of", var), col = "skyblue", border = "black")
+}
+```
+
+```{r}
+# Bivariate Analysis for Numeric Variables vs. Target Variable
+# Box plots
+par(mfrow=c(3, 1))  # Arrange plots in a vertical layout
+boxplot(income_annum ~ loan_status, data = loan_data, main = "Income vs. Loan Status", xlab = "Loan Status", ylab = "Annual Income")
+boxplot(loan_amount ~ loan_status, data = loan_data, main = "Loan Amount vs. Loan Status", xlab = "Loan Status", ylab = "Loan Amount")
+boxplot(cibil_score ~ loan_status, data = loan_data, main = "CIBIL Score vs. Loan Status", xlab = "Loan Status", ylab = "CIBIL Score")
+
+# Bivariate Analysis for Categorical Variables vs. Target Variable
+# Stacked bar plots
+loan_status_education <- table(loan_data$loan_status, loan_data$education)
+loan_status_self_employed <- table(loan_data$loan_status, loan_data$self_employed)
+
+barplot(loan_status_education, main = "Loan Status vs. Education Level", xlab = "Loan Status", ylab = "Frequency", col = c("skyblue", "salmon"), legend = rownames(loan_status_education))
+barplot(loan_status_self_employed, main = "Loan Status vs. Self-Employment Status", xlab = "Loan Status", ylab = "Frequency", col = c("skyblue", "salmon"), legend = rownames(loan_status_self_employed))
+```
+```{r}
+# Numeric vs. Numeric Variables (Scatter Plot)
+plot(loan_data$income_annum, loan_data$loan_amount, 
+     xlab = "Annual Income", ylab = "Loan Amount", 
+     main = "Scatter Plot: Annual Income vs. Loan Amount", col = "blue")
+```
+```{r}
+# Numeric vs. Categorical Variables (Box Plot)
+boxplot(income_annum ~ education, data = loan_data, 
+        xlab = "Education Level", ylab = "Annual Income", 
+        main = "Box Plot: Annual Income vs. Education Level", col = "skyblue")
+```
+```{r}
+# Categorical vs. Categorical Variables (Contingency Table)
+contingency_table <- table(loan_data$education, loan_data$self_employed)
+contingency_table
+```
+```{r}
+# Numeric vs. Target Variable (Box Plot)
+boxplot(income_annum ~ loan_status, data = loan_data, 
+        xlab = "Loan Status", ylab = "Annual Income", 
+        main = "Box Plot: Annual Income vs. Loan Status", col = "salmon")
+```
+```{r}
+# t-test
+t_test_result <- t.test(income_annum ~ loan_status, data = loan_data)
+t_test_result
+```
+```{r}
+# Categorical vs. Target Variable (Stacked Bar Plot)
+loan_status_education <- table(loan_data$loan_status, loan_data$education)
+barplot(loan_status_education, beside = TRUE, 
+        main = "Loan Status vs. Education Level", 
+        xlab = "Loan Status", ylab = "Frequency", 
+        legend = rownames(loan_status_education), col = c("skyblue", "salmon"))
+```
+```{r}
+# Chi-square Test
+chisq_test_result <- chisq.test(loan_data$education, loan_data$loan_status)
+chisq_test_result
+```
+```{r}
+# Correlation Analysis (Pearson Correlation Coefficient)
+correlation_matrix <- cor(loan_data[, c("income_annum", "loan_amount", 
+                                        "cibil_score")])
+correlation_matrix
+```
+# Machine Learning Method Selection and Model training
+
+
+# 4. Data Preprocessing
+```{r}
+# Covert categorical variables into integers
+loan_data$education <- as.integer(loan_data$education)
+loan_data$self_employed <- as.integer(loan_data$self_employed)
+loan_data$loan_status <- as.integer(loan_data$loan_status)
+```
+
+```{r}
+head(loan_data)
+```
+```{r}
+# Covert factor levels to integers by converting back to factors
+loan_data$education <- as.factor(loan_data$education)
+loan_data$self_employed <- as.factor(loan_data$self_employed)
+loan_data$loan_status <- as.factor(loan_data$loan_status)
+```
+```{r}
+head(loan_data)
+```
+```{r}
+# Split the data into 80% training and 20% testing
+set.seed(123) # Set seed for reproducibility
+train_set <- sample(1:nrow(loan_data), 0.8 * nrow(loan_data))
+
+train <- loan_data[train_set, ]
+test <- loan_data[-train_set, ]
+```
+
+```{r}
+# Dimensions of train data and test data
+cat("dimension of train data is: ")
+cat(dim(train))
+cat("\n dimension of test data is:  ")
+cat(dim(test))
+```
+```{r}
+str(loan_data)
+```
+# Feature Engineering
+
+```{r}
+# Load required libraries
+library(dplyr)
+
+# Feature Standardization
+# Define function for standardization (Z-score scaling)
+standardize <- function(x) {
+  (x - mean(x)) / sd(x)
+}
+
+# Apply standardization to selected numerical variables
+loan_data_standardized <- loan_data %>%
+  mutate_at(vars(income_annum, loan_amount, cibil_score,
+                 residential_assets_value, commercial_assets_value,
+                 luxury_assets_value, bank_asset_value),
+            standardize)
+
+# Display the updated dataset
+head(loan_data_standardized)
+```
+```{r}
+tail(loan_data_standardized)
+```
+```{r}
+# Check levels of factor variables
+print(levels(loan_data$education))
+print(levels(loan_data$self_employed))
+print(levels(loan_data$loan_status))
+```
+
+# 5. Machine learning method selection and model training
+
+```{r}
+# Train logistic regression model
+
+logistic_model <- train(loan_status ~ ., data = train, method = "glm",
+                        family = "binomial")
+# Train decision tree model
+tree_model <- train(loan_status ~ ., data = train, method = "rpart")
+
+# Train random forest model
+rf_model <- train(loan_status ~ ., data = train, method = "rf")
+
+# Train SVM model
+svm_model <- svm(loan_status ~ ., data = train, kernel = "radial")
+```
+
+## Check model performance
+```{r}
+# logistic regression model performance
+print(logistic_model)
+```
+# Interpretation Generalized Linear Model (GLM):
+
+Accuracy: 91.60%
+Kappa: 82.01%
+Resampling method: Bootstrapped (25 reps)
+Summary: The GLM model achieved an accuracy of 91.60% and a kappa value of 82.01% when evaluated using bootstrapped resampling.
+
+```{r}
+# Tree model performance
+print(tree_model)
+```
+# Interpretation CART (Classification and Regression Trees):
+
+Tuning parameters: cp (complexity parameter)
+Best model:
+cp: 0.01399689
+Accuracy: 96.17%
+Kappa: 91.86%
+Summary: The best CART model was selected based on the highest accuracy, with a value of 96.17%. The optimal complexity parameter (cp) for this model was 0.01399689.
+
+```{r}
+# Random model performance
+print(rf_model)
+```
+# Interpretation Random Forest:
+
+Tuning parameters: mtry (number of variables randomly sampled as candidates at each split)
+Best model:
+mtry: 7
+Accuracy: 98.18%
+Kappa: 96.10%
+Summary: The best Random Forest model was selected based on the highest accuracy, achieving an accuracy of 98.18% with an mtry value of 7.
+
+```{r}
+# SVM model performance
+print(svm_model)
+```
+# Interpretation Support Vector Machine (SVM):
+
+Model details:
+SVM-Type: C-classification
+SVM-Kernel: radial
+Cost: 1
+Summary: The SVM model with a radial kernel and a cost parameter of 1 was trained on the data. It has 888 support vectors.
+
+Overall, the results indicate that Random Forest achieved the highest accuracy among the models evaluated, followed by CART and then the GLM. The SVM model's performance is not directly comparable in terms of accuracy, as it operates differently from the other algorithms.
+
+
+# 6. Model evaluation
+## Prediction
+```{r}
+# Predictions of each algorithms for new data (test data)
+logistic_preds <- predict(logistic_model, newdata = test)
+tree_preds <- predict(tree_model, newdata = test)
+rf_preds <- predict(rf_model, newdata = test)
+svm_preds <- predict(svm_model, newdata = test)
+```
+
+## Evaluation the trained model
+
+```{r}
+# Evaluate logistic regression model
+confusionMatrix(logistic_preds, test$loan_status)
+```
+# Interpretation
+The model correctly classified 91.92% of cases. It has high sensitivity and specificity, indicating good performance in identifying both positive and negative cases.
+
+```{r}
+# Evaluate decision tree model
+confusionMatrix(tree_preds, test$loan_status)
+```
+# Interpretation 
+The model achieved higher accuracy compared to the first one, with improved specificity. It correctly classified 95.43% of cases, with high sensitivity and specificity.
+
+```{r}
+# Evaluate random forest model
+confusionMatrix(rf_preds, test$loan_status)
+```
+# Interpretation: 
+This model shows the highest accuracy among the three, with excellent sensitivity, specificity, and balanced accuracy.
+
+```{r}
+# Evaluate SVM model
+confusionMatrix(svm_preds, test$loan_status)
+```
+# Interpretation: 
+This model achieved slightly lower accuracy compared to the others but still performed well, with balanced sensitivity and specificity.
+
+Overall, the models show varying levels of performance, with the third model (98.36% accuracy) performing the best among them. These statistics help evaluate the models' classification performance and guide the selection of the most suitable model for the task at hand.
+
+```{r}
+# Load required libraries
+library(caret)
+library(ggplot2)
+
+# Model names
+model_names <- c("Logistic Regression", "Decision Tree", "Random Forest", "SVM")
+
+# Model predictions
+predictions <- list(logistic_preds, tree_preds, rf_preds, svm_preds)
+
+# Model accuracies
+accuracies <- sapply(predictions, function(preds) {
+  confusionMatrix(preds, test$loan_status)$overall["Accuracy"]
+})
+
+# Create dataframe
+model_accuracy_df <- data.frame(Model = model_names, Accuracy = accuracies)
+
+# Plot
+ggplot(model_accuracy_df, aes(x = Model, y = Accuracy, fill = Model)) +
+  geom_bar(stat = "identity") +
+  labs(title = "Model Accuracy Comparison", x = "Model", y = "Accuracy") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+```
+```{r}
+# Load the necessary library
+library(psych)
+
+# Plot the scatter plots and correlations
+pairs.panels(loan_data)
+
+```
+
+# 7. Model improvement/ optimization
